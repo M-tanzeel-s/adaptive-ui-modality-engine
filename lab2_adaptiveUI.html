@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lab 3: Adaptive UI Modality Engine</title>
+  <style>
+    :root {
+      --lavender: #c9b6f5;
+      --pink: #f8b4d4;
+      --gold: #f6d77a;
+      --gold-deep: #e8b830;
+      --ink: #4a3470;
+      --ink-soft: #7a65a3;
+      --card: rgba(255, 255, 255, 0.72);
+      --btn-padding: 10px 18px;
+      --btn-font-size: 0.95rem;
+      --focus-ring: transparent;
+    }
+
+    /* Adaptive Rule: Coarse touch targets for touch devices */
+    body.mode-touch {
+      --btn-padding: 18px 32px;
+      --btn-font-size: 1.2rem;
+    }
+
+    /* Adaptive Rule: Medium targets for pen/stylus */
+    body.mode-pen {
+      --btn-padding: 14px 24px;
+      --btn-font-size: 1.05rem;
+    }
+
+    /* Adaptive Rule: Prominent focus indicator for keyboard navigation */
+    body.mode-keyboard {
+      --focus-ring: 4px solid var(--gold-deep);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      padding: 28px 18px 48px;
+      font-family: "Segoe UI", Arial, sans-serif;
+      color: var(--ink);
+      background: radial-gradient(circle at 12% 8%, #efe4ff 0%, transparent 50%),
+                  radial-gradient(circle at 92% 92%, #ffe3f1 0%, transparent 50%),
+                  #fff8ec;
+      background-attachment: fixed;
+    }
+
+    .wrap { max-width: 760px; margin: 0 auto; }
+
+    h1 {
+      margin: 0 0 6px;
+      font-size: clamp(1.5rem, 5vw, 2.2rem);
+      background: linear-gradient(90deg, #a78bdb, #ef8fbd, #e8b830);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+
+    .sub { margin: 0 0 20px; color: var(--ink-soft); font-size: 0.95rem; }
+
+    .badge {
+      display: inline-block;
+      padding: 8px 14px;
+      background: linear-gradient(90deg, var(--lavender), var(--pink));
+      color: var(--ink);
+      border: 2px solid var(--gold);
+      border-radius: 999px;
+      font-weight: bold;
+      margin-bottom: 20px;
+      box-shadow: 0 4px 16px rgba(248, 180, 212, 0.45);
+      transition: transform 0.25s ease;
+    }
+    .badge.pulse { transform: scale(1.04); }
+
+    .device {
+      display: inline-block;
+      margin: 0 0 20px 8px;
+      padding: 8px 14px;
+      background: #fff6d9;
+      border: 2px solid var(--gold);
+      border-radius: 999px;
+      font-weight: bold;
+      font-size: 0.9rem;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid #eadcff;
+      border-radius: 16px;
+      padding: 18px;
+      margin-bottom: 18px;
+      box-shadow: 0 6px 20px rgba(201, 182, 245, 0.25);
+    }
+
+    .card h3 { margin: 0 0 12px; color: #9a7fd1; font-size: 1rem; letter-spacing: 0.03em; }
+
+    .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+
+    .nav-button {
+      padding: var(--btn-padding);
+      font-size: var(--btn-font-size);
+      background: linear-gradient(135deg, var(--lavender), var(--pink));
+      color: var(--ink);
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      outline: var(--focus-ring);
+      outline-offset: 3px;
+      transition: all 0.2s ease;
+    }
+    .nav-button:hover { filter: brightness(1.05); box-shadow: 0 4px 14px rgba(248, 180, 212, 0.7); }
+    .nav-button.gold { background: linear-gradient(135deg, #fbe7a1, var(--gold)); font-weight: bold; }
+    .nav-button.ghost { background: #fff; border: 2px solid var(--gold); color: var(--ink); }
+
+    .field {
+      padding: var(--btn-padding);
+      font-size: var(--btn-font-size);
+      background: #fff;
+      color: var(--ink);
+      border: 2px solid #e2d4fa;
+      border-radius: 10px;
+      outline: var(--focus-ring);
+      outline-offset: 3px;
+      min-width: 0;
+      flex: 1 1 200px;
+    }
+    .field::placeholder { color: #b3a3d1; }
+
+    /* Toggle */
+    .toggle { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; font-size: var(--btn-font-size); }
+    .toggle input { position: absolute; opacity: 0; }
+    .track {
+      width: calc(var(--btn-font-size) * 2.8);
+      height: calc(var(--btn-font-size) * 1.5);
+      background: #e2d4fa;
+      border-radius: 999px;
+      position: relative;
+      transition: background 0.2s;
+    }
+    .track::after {
+      content: "";
+      position: absolute;
+      top: 12%; left: 6%;
+      height: 76%; aspect-ratio: 1;
+      border-radius: 50%;
+      background: #fff;
+      box-shadow: 0 1px 4px rgba(74, 52, 112, 0.25);
+      transition: transform 0.2s;
+    }
+    .toggle input:checked + .track { background: var(--pink); }
+    .toggle input:checked + .track::after { transform: translateX(calc(var(--btn-font-size) * 1.45)); background: #fff3c4; }
+    .toggle input:focus-visible + .track { outline: var(--focus-ring); outline-offset: 3px; }
+
+    /* Stats */
+    .stats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; text-align: center; }
+    .stat { background: #f6efff; border-radius: 12px; padding: 10px 4px; }
+    .stat:nth-child(2) { background: #ffeef6; }
+    .stat:nth-child(3) { background: #fff6d9; }
+    .stat:nth-child(4) { background: #eaf6ff; }
+    .stat b { display: block; font-size: 1.5rem; color: var(--ink); }
+    .stat span { font-size: 0.75rem; color: var(--ink-soft); }
+
+    .stat:nth-child(5) { background: #e9f9ef; }
+
+    /* Voice & gesture stage */
+    #stage {
+      width: 100%;
+      height: 260px;
+      background: #fff;
+      border: 2px dashed #d9c8f7;
+      border-radius: 14px;
+      margin-top: 14px;
+      position: relative;
+      overflow: hidden;
+    }
+    .target-box {
+      width: 80px;
+      height: 80px;
+      background-color: #c9b6f5;
+      color: var(--ink);
+      font-weight: bold;
+      line-height: 80px;
+      text-align: center;
+      border-radius: 12px;
+      position: absolute;
+      cursor: grab;
+      user-select: none;
+      touch-action: none;
+      box-shadow: 0 6px 16px rgba(201, 182, 245, 0.6);
+      transition: background-color 0.3s, transform 0.2s;
+    }
+    .target-box.grabbing { cursor: grabbing; }
+    .voice-status { margin-top: 10px; font-size: 0.95rem; color: var(--ink-soft); }
+    .nav-button.listening {
+      background: linear-gradient(135deg, #f8b4d4, #f59a9a);
+      animation: glow 1.1s ease-in-out infinite alternate;
+    }
+    @keyframes glow { from { box-shadow: 0 0 4px #f8b4d4; } to { box-shadow: 0 0 18px #f59a9a; } }
+    @media (prefers-reduced-motion: reduce) { .nav-button.listening { animation: none; } }
+
+    .log { list-style: none; margin: 0; padding: 0; font-size: 0.88rem; color: var(--ink); }
+    .log li { padding: 6px 0; border-bottom: 1px dashed #e2d4fa; }
+    .log li:last-child { border-bottom: none; }
+    .log time { color: #d4a017; margin-right: 8px; }
+
+    .seg { display: inline-flex; flex-wrap: wrap; gap: 8px; }
+    .seg button.active { background: linear-gradient(135deg, #fbe7a1, var(--gold)); border-color: transparent; font-weight: bold; }
+
+    @media (max-width: 480px) { .stats { grid-template-columns: repeat(3, 1fr); } }
+    @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+  </style>
+</head>
+<body class="mode-mouse">
+  <div class="wrap">
+    <h1>Adaptive UI Modality Engine</h1>
+    <p class="sub">Touch it, click it, or press Tab. The UI reshapes itself.</p>
+
+    <div class="badge" id="modalityBadge" role="status" aria-live="polite">Active Modality: Mouse (Fine Pointer)</div>
+    <div class="device" id="deviceBadge"></div>
+
+    <div class="card">
+      <h3>✨ Adaptive Components</h3>
+      <div class="row" style="margin-bottom:14px">
+        <button class="nav-button">Interactive Action Button</button>
+        <button class="nav-button gold">Gold Action</button>
+        <button class="nav-button ghost">Ghost</button>
+      </div>
+      <div class="row">
+        <input class="field" type="text" placeholder="Type something here…" aria-label="Demo text input">
+        <label class="toggle"><input type="checkbox"><span class="track"></span> Notifications</label>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>🎙️ Voice &amp; Gesture</h3>
+      <div class="row">
+        <button class="nav-button gold" id="micBtn">🎙️ Start Voice Control</button>
+      </div>
+      <div class="voice-status" id="voiceStatus">Voice control is off. Drag the box with a mouse, finger or pen, or press the button and speak.</div>
+      <div id="stage"><div class="target-box" id="box">Box</div></div>
+      <div class="voice-status" id="actionStats">Drags: 0 · Voice commands: 0</div>
+    </div>
+
+    <div class="card">
+      <h3>🎛️ Mode Control</h3>
+      <div class="seg" id="modeSeg">
+        <button class="nav-button ghost active" data-mode="auto">Auto</button>
+        <button class="nav-button ghost" data-mode="mouse">Mouse</button>
+        <button class="nav-button ghost" data-mode="touch">Touch</button>
+        <button class="nav-button ghost" data-mode="pen">Pen</button>
+        <button class="nav-button ghost" data-mode="keyboard">Keyboard</button>
+        <button class="nav-button ghost" data-mode="voice">Voice</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>📊 Live Stats</h3>
+      <div class="stats">
+        <div class="stat"><b id="c-mouse">0</b><span>Mouse</span></div>
+        <div class="stat"><b id="c-touch">0</b><span>Touch</span></div>
+        <div class="stat"><b id="c-pen">0</b><span>Pen</span></div>
+        <div class="stat"><b id="c-keyboard">0</b><span>Keyboard</span></div>
+        <div class="stat"><b id="c-voice">0</b><span>Voice</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>🕒 Switch History</h3>
+      <ul class="log" id="log"><li>No switches yet.</li></ul>
+      <div class="row" style="margin-top:12px">
+        <button class="nav-button ghost" id="resetBtn">Reset</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const badge = document.getElementById('modalityBadge');
+    const deviceBadge = document.getElementById('deviceBadge');
+    const logEl = document.getElementById('log');
+    const seg = document.getElementById('modeSeg');
+
+    const MODES = {
+      mouse:    { label: 'Mouse (Fine Pointer - Compact Precision Layout)', cls: 'mode-mouse' },
+      touch:    { label: 'Touch (Coarse Pointer - Enlarged Touch Targets)', cls: 'mode-touch' },
+      pen:      { label: 'Pen (Stylus - Medium Targets)', cls: 'mode-pen' },
+      keyboard: { label: 'Keyboard (High-Contrast Focus Ring Active)', cls: 'mode-keyboard' },
+      voice:    { label: 'Voice (Speech Commands Active)', cls: 'mode-voice' }
+    };
+
+    const counts = { mouse: 0, touch: 0, pen: 0, keyboard: 0, voice: 0 };
+    const history = [];
+    let current = null;       // nothing active until startup
+    let lastDetected = 'mouse';
+    let override = 'auto';    // 'auto' or a forced mode
+
+    // ---- Device detection: computer or mobile/tablet ----
+    function detectDevice() {
+      const uaMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+      const coarse = window.matchMedia('(pointer: coarse)').matches;
+      const hasTouch = navigator.maxTouchPoints > 0;
+      const mobile = uaMobile || (coarse && hasTouch);
+      return mobile
+        ? { text: '📱 Device: Mobile / Tablet', mode: 'touch' }
+        : { text: '💻 Device: Computer', mode: 'mouse' };
+    }
+
+    function render(modeKey) {
+      document.body.className = MODES[modeKey].cls;
+      badge.textContent = `Active Modality: ${MODES[modeKey].label}` +
+        (override === 'auto' ? '' : ' [Manual]');
+      badge.classList.add('pulse');
+      setTimeout(() => badge.classList.remove('pulse'), 250);
+    }
+
+    function renderLog() {
+      logEl.innerHTML = history.length
+        ? history.map(h => `<li><time>${h.time}</time>Switched to ${h.mode} (${h.src})</li>`).join('')
+        : '<li>No switches yet.</li>';
+    }
+
+    // source: 'start' = page opened, 'auto' = real input detected,
+    //         'sync' = Auto button pressed, 'manual' = mode button forced it
+    function setModality(modeKey, source = 'auto') {
+      if (source === 'auto' && override !== 'auto') return;   // ignore detection while forced
+      const changed = modeKey !== current;
+      if (!changed && source === 'auto') return;
+      current = modeKey;
+
+      // Count every real switch (start, detected, auto) but not manual button clicks
+      if (changed && source !== 'manual') {
+        counts[modeKey]++;
+        document.getElementById('c-' + modeKey).textContent = counts[modeKey];
+      }
+      if (changed) {
+        const src = { start: 'at start', auto: 'detected', sync: 'auto restored', manual: 'manual' }[source];
+        history.unshift({ time: new Date().toLocaleTimeString(), mode: modeKey, src });
+        if (history.length > 5) history.pop();
+        renderLog();
+      }
+      render(modeKey);
+    }
+
+    // 1. Pointer events cover mouse, touch and pen
+    function onPointer(e) {
+      if (!MODES[e.pointerType]) return;
+      lastDetected = e.pointerType;
+      setModality(e.pointerType);
+    }
+    window.addEventListener('pointerdown', onPointer);
+    window.addEventListener('pointermove', onPointer);
+
+    // 2. Keyboard: any key press (Tab, typing, arrows...)
+    function onKeyboard() {
+      lastDetected = 'keyboard';
+      setModality('keyboard');
+    }
+    window.addEventListener('keydown', (e) => {
+      if (['Shift', 'Control', 'Alt', 'Meta'].includes(e.key)) return;
+      onKeyboard();
+    });
+    // Typing in the text box (also catches on-screen keyboards on phones)
+    window.addEventListener('input', (e) => {
+      if (e.target.matches('input[type="text"], textarea')) onKeyboard();
+    });
+
+    // 3. Mode control buttons
+    seg.addEventListener('click', (e) => {
+      const btn = e.target.closest('button');
+      if (!btn) return;
+      override = btn.dataset.mode;
+      seg.querySelectorAll('button').forEach(b => b.classList.toggle('active', b === btn));
+      if (override === 'auto') {
+        deviceBadge.textContent = detectDevice().text;   // re-check computer vs mobile
+        setModality(lastDetected, 'sync');
+      } else {
+        setModality(override, 'manual');
+      }
+    });
+
+    // 4. Reset
+    document.getElementById('resetBtn').addEventListener('click', () => {
+      Object.keys(counts).forEach(k => {
+        counts[k] = 0;
+        document.getElementById('c-' + k).textContent = 0;
+      });
+      history.length = 0;
+      renderLog();
+    });
+
+    // 5. Voice & gesture stage
+    const stage = document.getElementById('stage');
+    const box = document.getElementById('box');
+    const micBtn = document.getElementById('micBtn');
+    const voiceStatus = document.getElementById('voiceStatus');
+    const actionStats = document.getElementById('actionStats');
+    const COLORS = { red: '#f59a9a', blue: '#9bbcf5', green: '#9fdcb3', pink: '#f8b4d4', gold: '#f6d77a', purple: '#c9b6f5' };
+    let drags = 0, voiceCmds = 0, scale = 1;
+
+    function updateActionStats() {
+      actionStats.textContent = `Drags: ${drags} · Voice commands: ${voiceCmds}`;
+    }
+    function centerBox() {
+      box.style.left = (stage.clientWidth - box.offsetWidth) / 2 + 'px';
+      box.style.top = (stage.clientHeight - box.offsetHeight) / 2 + 'px';
+    }
+
+    // Gesture: drag the box with mouse, finger or pen
+    let dragging = false, moved = false, startX = 0, startY = 0, startLeft = 0, startTop = 0;
+    box.addEventListener('pointerdown', (e) => {
+      dragging = true; moved = false;
+      box.setPointerCapture(e.pointerId);
+      startX = e.clientX; startY = e.clientY;
+      startLeft = box.offsetLeft; startTop = box.offsetTop;
+      box.classList.add('grabbing');
+    });
+    box.addEventListener('pointermove', (e) => {
+      if (!dragging) return;
+      const dx = e.clientX - startX, dy = e.clientY - startY;
+      if (Math.abs(dx) + Math.abs(dy) > 3) moved = true;
+      const maxL = stage.clientWidth - box.offsetWidth;
+      const maxT = stage.clientHeight - box.offsetHeight;
+      box.style.left = Math.max(0, Math.min(maxL, startLeft + dx)) + 'px';
+      box.style.top = Math.max(0, Math.min(maxT, startTop + dy)) + 'px';
+    });
+    function endDrag() {
+      if (!dragging) return;
+      dragging = false;
+      box.classList.remove('grabbing');
+      if (moved) { drags++; updateActionStats(); }
+    }
+    box.addEventListener('pointerup', endDrag);
+    box.addEventListener('pointercancel', endDrag);
+
+    // Voice: Web Speech API
+    function applyCommand(cmd) {
+      for (const name in COLORS) {
+        if (cmd.includes(name)) box.style.backgroundColor = COLORS[name];
+      }
+      if (cmd.includes('bigger')) scale = Math.min(2.2, scale + 0.3);
+      if (cmd.includes('smaller')) scale = Math.max(0.6, scale - 0.3);
+      if (cmd.includes('reset')) {
+        scale = 1;
+        box.style.backgroundColor = COLORS.purple;
+        centerBox();
+      }
+      box.style.transform = `scale(${scale})`;
+    }
+
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) {
+      voiceStatus.textContent = 'Voice control is not supported in this browser. Try Chrome or Edge.';
+      micBtn.disabled = true;
+    } else {
+      const rec = new SR();
+      rec.continuous = true;
+      rec.lang = 'en-US';
+      let listening = false, hadError = false;
+
+      micBtn.addEventListener('click', () => {
+        if (listening) { rec.stop(); return; }
+        try { rec.start(); } catch (err) { /* already starting */ }
+      });
+      rec.onstart = () => {
+        listening = true; hadError = false;
+        micBtn.classList.add('listening');
+        micBtn.textContent = '⏹️ Stop Voice Control';
+        voiceStatus.textContent = "Listening… try 'red', 'blue', 'green', 'pink', 'gold', 'bigger', 'smaller', 'reset'";
+      };
+      rec.onend = () => {
+        listening = false;
+        micBtn.classList.remove('listening');
+        micBtn.textContent = '🎙️ Start Voice Control';
+        if (!hadError) voiceStatus.textContent = 'Voice control is off.';
+      };
+      rec.onerror = (e) => {
+        hadError = true;
+        voiceStatus.textContent = e.error === 'not-allowed'
+          ? 'Microphone is blocked. Allow mic access and try again.'
+          : `Voice error: ${e.error}`;
+      };
+      rec.onresult = (event) => {
+        const cmd = event.results[event.results.length - 1][0].transcript.trim().toLowerCase();
+        voiceStatus.textContent = `Voice Command Detected: "${cmd}"`;
+        voiceCmds++;
+        updateActionStats();
+        lastDetected = 'voice';
+        setModality('voice');
+        applyCommand(cmd);
+      };
+    }
+
+    // Reset button also clears gesture/voice counters
+    document.getElementById('resetBtn').addEventListener('click', () => {
+      drags = 0; voiceCmds = 0;
+      updateActionStats();
+    });
+    centerBox();
+
+    // 6. Startup: detect device and count the starting mode
+    const device = detectDevice();
+    deviceBadge.textContent = device.text;
+    lastDetected = device.mode;
+    setModality(device.mode, 'start');
+  </script>
+</body>
+</html>
